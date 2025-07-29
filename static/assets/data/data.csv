@@ -1,0 +1,7 @@
+year,labor_price_seconds,labor_price_minutes,labor_price_hours,light
+2024,0.01,0.0001666666667,0.000002777777778,LED
+1992,0.42,0.007,0.0001166666667,Flourescent
+1879,2700,45,0.75,Carbon Filament
+1843,18000,300,5,Whale Oil Lamp
+500,79200,1320,22,Olive Oil Lamp
+-1750,147600,2460,41,Sesame Oil Lamp

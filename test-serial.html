@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Serial Test</title>
+</head>
+<body>
+    <button id="connect">Test Serial Connection</button>
+    <div id="output"></div>
+
+    <script>
+        document.getElementById('connect').addEventListener('click', async () => {
+            const output = document.getElementById('output');
+            
+            try {
+                output.innerHTML = 'Requesting port...';
+                
+                // Request port access
+                const port = await navigator.serial.requestPort();
+                output.innerHTML += '<br>Port selected, opening...';
+                
+                // Open with same settings as your Arduino
+                await port.open({ 
+                    baudRate: 9600,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none'
+                });
+                
+                output.innerHTML += '<br>SUCCESS! Port opened.';
+                
+                // Close immediately
+                await port.close();
+                output.innerHTML += '<br>Port closed.';
+                
+            } catch (error) {
+                output.innerHTML += '<br>ERROR: ' + error.message;
+                console.error('Serial error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
