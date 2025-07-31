@@ -28,63 +28,69 @@
 <style>
 	.slide {
 		text-align: center;
-		max-width: 800px;
-		padding: 1rem 2rem;
+		max-width: 90vw;
+		padding: 0.5vh 4vw;
+		flex-shrink: 0;
 	}
 
 	.slide h1, .slide h2 {
-		margin-bottom: 0.5rem;
-		max-width: 1200px;
-		white-space: nowrap;
+		margin-bottom: 1vh;
+		max-width: 90vw;
+		white-space: normal;
 		overflow: visible;
+		text-align: center;
+		line-height: 1.05;
+		font-family: "National 2 Web", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
 	}
 
 	.slide h1 {
-		font-size: 4rem;
+		font-size: clamp(2rem, 5vw, 7rem);
+		font-weight: 500;
 	}
 
 	.slide h2 {
-		font-size: 3.5rem;
+		font-size: clamp(1.6rem, 4.5vw, 6rem);
+		font-weight: 500;
 	}
 
 	.slide p {
-		font-size: 1.5rem;
+		font-size: clamp(1.25rem, 3vw, 4rem);
 		line-height: 1.6;
-		margin-bottom: 1.5rem;
+		margin-bottom: 3vh;
 		color: #555;
-		max-width: 800px;
+		max-width: 80vw;
 		margin-left: auto;
 		margin-right: auto;
+		font-family: "Atlas Grotesk", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
 	}
 
-
-	@media (max-width: 768px) {
+	/* Ensure readability on very large screens */
+	@media (min-width: 1920px) {
 		.slide h1 {
-			font-size: 3rem;
+			font-size: clamp(6rem, 8vw, 14rem);
 		}
 
 		.slide h2 {
-			font-size: 2.5rem;
+			font-size: clamp(5rem, 7vw, 12rem);
 		}
 
 		.slide p {
-			font-size: 1.25rem;
+			font-size: clamp(2rem, 3vw, 5rem);
 		}
-
 	}
 
+	/* Ensure readability on very small screens */
 	@media (max-width: 480px) {
 		.slide h1 {
-			font-size: 2.5rem;
+			font-size: clamp(2rem, 8vw, 3rem);
 		}
 
 		.slide h2 {
-			font-size: 2rem;
+			font-size: clamp(1.8rem, 7vw, 2.5rem);
 		}
 
 		.slide p {
-			font-size: 1.125rem;
+			font-size: clamp(1rem, 3vw, 1.5rem);
 		}
-
 	}
 </style>

@@ -54,92 +54,48 @@
 		background: rgba(0, 0, 0, 0.9);
 		color: #00ff41;
 		font-family: 'Courier New', monospace;
-		padding: 3rem 4rem;
-		border-radius: 1rem;
-		border: 4px solid #00ff41;
+		padding: clamp(1.2rem, 3.2vh, 4rem) clamp(1.6rem, 4.8vw, 6.4rem);
+		border-radius: clamp(0.4rem, 1.6vw, 1.6rem);
+		border: clamp(2px, 0.4vw, 5px) solid #00ff41;
 		box-shadow: 
-			0 0 40px rgba(0, 255, 65, 0.4),
-			inset 0 0 40px rgba(0, 255, 65, 0.15);
-		text-shadow: 0 0 20px rgba(0, 255, 65, 0.9);
+			0 0 clamp(16px, 4vw, 48px) rgba(0, 255, 65, 0.4),
+			inset 0 0 clamp(16px, 4vw, 48px) rgba(0, 255, 65, 0.15);
+		text-shadow: none;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: clamp(0.4rem, 1.6vw, 1.6rem);
 	}
 
 	.time-component {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		min-width: 120px;
+		min-width: clamp(56px, 6.4vw, 120px);
 	}
 
 	.time-value {
-		font-size: 4rem;
+		font-size: clamp(1.6rem, 4.8vw, 6.4rem);
 		font-weight: bold;
 		line-height: 1;
 		letter-spacing: 0.1em;
 	}
 
 	.time-label {
-		font-size: 1.2rem;
+		font-size: clamp(0.64rem, 1.6vw, 1.6rem);
 		font-weight: normal;
 		opacity: 0.8;
-		margin-top: 0.5rem;
+		margin-top: clamp(0.2rem, 0.8vw, 0.8rem);
 		text-transform: lowercase;
 	}
 
 	.time-separator {
-		font-size: 4rem;
+		font-size: clamp(1.6rem, 4.8vw, 6.4rem);
 		font-weight: bold;
 		opacity: 0.6;
-		margin: 0 0.5rem;
+		margin: 0 clamp(0.2rem, 0.8vw, 0.8rem);
 		align-self: flex-start;
-		margin-top: 0.25rem;
+		margin-top: clamp(0.1rem, 0.4vw, 0.4rem);
 	}
 
-	@media (max-width: 768px) {
-		.timer-display {
-			padding: 2rem 3rem;
-			gap: 0.75rem;
-		}
-		
-		.time-component {
-			min-width: 90px;
-		}
-		
-		.time-value {
-			font-size: 3rem;
-		}
-		
-		.time-label {
-			font-size: 1rem;
-		}
-		
-		.time-separator {
-			font-size: 3rem;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.timer-display {
-			padding: 1.5rem 2rem;
-			gap: 0.5rem;
-		}
-		
-		.time-component {
-			min-width: 70px;
-		}
-		
-		.time-value {
-			font-size: 2.5rem;
-		}
-		
-		.time-label {
-			font-size: 0.9rem;
-		}
-		
-		.time-separator {
-			font-size: 2.5rem;
-		}
-	}
+	/* Responsive design now handled by clamp() functions above */
 </style>

@@ -9,6 +9,7 @@
 	import { csv } from "d3-fetch";
 	import ArduinoSerial from "$utils/arduinoSerial.js";
 	import ArduinoWiFi from "$utils/arduinoWebSocket.js";
+	import ArduinoBluetooth from "$utils/arduinoBluetooth.js";
 
 	const copy = getContext("copy");
 	const data = getContext("data");
@@ -20,10 +21,16 @@
 	let rippleTrigger = $state(0);
 	let continuousAudio = $state(null);
 	
+	// Track which steps have already played the completion ding
+	let stepsWithDingPlayed = $state(new Set());
+	
 	// Asset cycling state
 	let currentAssetIndex = $state(0);
 	let currentAssetSrc = $state(null);
 	let showAsset = $state(false);
+	
+	// Track if media cycle is complete for final step (step 7)
+	let finalStepMediaComplete = $state(false);
 	
 	// Page launch timer
 	let pageStartTime = $state(null);
@@ -46,14 +53,14 @@
 		const folderName = stepToFolder[step];
 		if (!folderName) return [];
 		
-		// Based on the folder structure we saw, return expected assets
+		// Based on the current folder structure, return available assets
 		const assetMap = {
-			'intro_1': ['1.png', '2.png', '3.png', '4.mov', '5.jpg', '6.jpg', '7.png'],
+			'intro_1': ['5.jpg', '6.jpg', '7.png'],
 			'2024': ['1.jpeg'],
 			'1992': ['1.png'], 
-			'1879': ['1.jpg', '2.png', '3.png'],
+			'1879': ['1.jpg', '2.png', '3.png', '4.jpg', '5.jpeg', '6.jpeg', '7.jpeg'],
 			'1843': ['1.jpg', '2.jpg'],
-			'500': ['1.mp4'],
+			'500': ['1.mp4', '2.mp4'],
 			'babylon': ['1.jpg']
 		};
 		
@@ -77,6 +84,7 @@
 		currentAssetIndex = 0;
 		currentAssetSrc = null;
 		showAsset = false;
+		finalStepMediaComplete = false;
 	}
 	
 	// Format elapsed time for display
@@ -143,7 +151,7 @@
 	let arduino = $state(null);
 	let isArduinoConnected = $state(false);
 	let arduinoError = $state(null);
-	let connectionType = $state('serial'); // 'serial' or 'wifi'
+	let connectionType = $state('bluetooth'); // Fixed to Bluetooth only
 
 	// Calculate timer limit based on labor price for current era
 	function getTimerLimit(step) {
@@ -191,9 +199,7 @@
 	const backgroundColor = $derived(`hsl(0, 0%, ${effectiveBrightness * 100}%)`);
 	const textColor = $derived(effectiveBrightness > 0.5 ? '#000000' : '#ffffff');
 	const headerColor = $derived(effectiveBrightness > 0.7 ? '#333333' : '#dddddd');
-	const textShadow = $derived(effectiveBrightness < 0.5 
-		? '0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.4)'
-		: '0 2px 4px rgba(0, 0, 0, 0.3)');
+	const textShadow = $derived('none');
 	const chartOpacity = $derived(isLightMode ? 1 : backgroundBrightness);
 
 	// Use effect to reset timer when entering year steps (to avoid race conditions)
@@ -211,8 +217,15 @@
 				cancelAnimationFrame(wheelAnimationId);
 				wheelAnimationId = null;
 			}
+			if (autoCompleteAnimationId) {
+				cancelAnimationFrame(autoCompleteAnimationId);
+				autoCompleteAnimationId = null;
+			}
 			
 			timerSeconds = 0;
+			
+			// Clear ding tracking for this step so it can play again
+			stepsWithDingPlayed.delete(currentStep);
 		}
 	});
 
@@ -239,6 +252,8 @@
 			// Create appropriate Arduino connection based on type
 			if (type === 'wifi') {
 				arduino = new ArduinoWiFi();
+			} else if (type === 'bluetooth') {
+				arduino = new ArduinoBluetooth();
 			} else {
 				arduino = new ArduinoSerial();
 			}
@@ -249,6 +264,14 @@
 			arduino.setDialChangeHandler((dialData) => {
 				handleArduinoDial(dialData);
 			});
+			
+			// Set up click handler if available (Bluetooth and WiFi support this)
+			if (arduino.setClickHandler) {
+				arduino.setClickHandler(() => {
+					console.log('Arduino click detected');
+					// Could trigger step navigation or other actions
+				});
+			}
 			
 			isArduinoConnected = true;
 			arduinoError = null;
@@ -274,7 +297,14 @@
 		if (currentStep < 2 || currentStep > 7) return;
 		
 		// Convert dial delta to proportional scroll amount
-		const sensitivity = 3; // Increased sensitivity for WiFi connection
+		// Adjust sensitivity based on connection type
+		let sensitivity = 3; // Default for WiFi
+		if (connectionType === 'serial') {
+			sensitivity = 2; // Lower for serial (more precise)
+		} else if (connectionType === 'bluetooth') {
+			sensitivity = 2.5; // Medium for Bluetooth
+		}
+		
 		const scrollAmount = dialData.delta * sensitivity;
 		
 		// Create synthetic wheel event with proportional deltaY
@@ -283,7 +313,7 @@
 			preventDefault: () => {}
 		};
 		
-		// Use existing wheel handler logic with reduced debouncing for WiFi
+		// Use existing wheel handler logic with reduced debouncing
 		handleWheelImmediate(syntheticEvent);
 	}
 
@@ -384,6 +414,11 @@
 			if (showAsset) {
 				showAsset = false;
 				currentAssetSrc = null;
+				
+				// Mark media cycle as complete for final step (step 7 = 1750 BCE)
+				if (currentStep === 7) {
+					finalStepMediaComplete = true;
+				}
 				return;
 			}
 		}
@@ -404,9 +439,10 @@
 			continuousAudio = null;
 		}
 		
-		// Only play audio starting from step 1 ("A Journey Back in Time") to step 2 (2024) onwards
-		if (fromStep < 1) {
-			return; // No sound for transitions before step 1
+		// Only play transition audio when moving TO timer steps (2-7)
+		// This excludes the first transition (0->1) and final transitions (7->8, 8->9, 9->10)
+		if (toStep < 2 || toStep > 7) {
+			return;
 		}
 		
 		// Special cases: continuous audio for historical eras
@@ -430,7 +466,7 @@
 			return;
 		}
 		
-		// Play audio for forward transitions
+		// Play audio for forward transitions to timer steps
 		let audioFile;
 		
 		// Special case: step 2 (2024) to step 3 (1992) - use seinfeld sound
@@ -444,14 +480,36 @@
 		const audio = new Audio(audioFile);
 		audio.currentTime = 0; // Start from beginning
 		
-		// Play for 10 seconds then stop (7 seconds for seinfeld, 10 for flashback)
-		const duration = audioFile.includes('seinfeld') ? 7000 : 10000;
 		audio.play().catch(e => console.log('Audio play failed:', e));
 		
-		setTimeout(() => {
-			audio.pause();
-			audio.currentTime = 0;
-		}, duration);
+		// Let seinfeld play in full, add smooth fadeout for flashback
+		if (audioFile.includes('seinfeld')) {
+			// Seinfeld plays in full without interruption
+			return;
+		}
+		
+		// For flashback sound: wait for it to finish naturally, then add fadeout
+		audio.addEventListener('loadedmetadata', () => {
+			const duration = audio.duration;
+			if (duration && duration > 0) {
+				// Start fadeout 2 seconds before the end
+				const fadeStartTime = Math.max(0, (duration - 2) * 1000);
+				
+				setTimeout(() => {
+					// Smooth fadeout over 2 seconds
+					const fadeInterval = setInterval(() => {
+						if (audio.volume > 0.1) {
+							audio.volume = Math.max(0, audio.volume - 0.05);
+						} else {
+							audio.pause();
+							audio.currentTime = 0;
+							audio.volume = 1; // Reset for next use
+							clearInterval(fadeInterval);
+						}
+					}, 100); // Fade step every 100ms
+				}, fadeStartTime);
+			}
+		});
 	}
 
 	function prevStep() {
@@ -471,6 +529,21 @@
 	function handleClick(event) {
 		// Only advance on clicks to the main content area, not UI elements
 		if (event.target.closest('.stepper-ui')) return;
+		
+		// Special handling for final step (step 7 = 1750 BCE) after media cycle
+		if (currentStep === 7 && finalStepMediaComplete) {
+			// Check if timer is already complete (at or near limit)
+			const completion = timerSeconds / currentTimerLimit;
+			if (completion >= 0.99) {
+				// Timer is complete, allow normal step advancement
+				nextStep();
+			} else {
+				// Auto-complete timer instead of advancing step
+				autoCompleteTimer();
+			}
+			return;
+		}
+		
 		nextStep();
 	}
 
@@ -547,6 +620,7 @@
 	}
 
 	let currentAnimationId = null;
+	let autoCompleteAnimationId = null;
 	
 	function animateTimer(start, end) {
 		// Cancel any existing animation
@@ -588,18 +662,19 @@
 		// Check if timer has reached the limit (within 1% tolerance)
 		if (currentStep >= 2 && currentStep <= 7) {
 			const completion = currentTime / currentTimerLimit;
-			if (completion >= 0.99) {
+			if (completion >= 0.99 && !stepsWithDingPlayed.has(currentStep)) {
+				stepsWithDingPlayed.add(currentStep);
 				playDingSound();
 			}
 		}
 	}
 
 	function playDingSound() {
-		// Try to play ding sound file, fallback to programmatic beep
-		const ding = new Audio('/assets/sounds/ding.mp3');
+		// Try to play bell_ding sound file, fallback to programmatic beep
+		const ding = new Audio('/assets/sounds/bell_ding.m4a');
 		ding.volume = 0.3; // Gentle volume
 		ding.play().catch(e => {
-			console.log('Ding sound file not found, using fallback beep');
+			console.log('Bell ding sound file not found, using fallback beep');
 			// Fallback: create a simple beep using Web Audio API
 			playBeep();
 		});
@@ -625,18 +700,54 @@
 		}
 	}
 
+	// Auto-complete timer animation for final step
+	function autoCompleteTimer() {
+		// Cancel any existing animations
+		if (currentAnimationId) {
+			cancelAnimationFrame(currentAnimationId);
+			currentAnimationId = null;
+		}
+		if (autoCompleteAnimationId) {
+			cancelAnimationFrame(autoCompleteAnimationId);
+			autoCompleteAnimationId = null;
+		}
+		
+		const startTime = performance.now();
+		const startSeconds = timerSeconds;
+		const targetSeconds = currentTimerLimit;
+		const duration = 5000; // 5 seconds
+		
+		function animate(currentTime) {
+			const elapsed = currentTime - startTime;
+			const progress = Math.min(elapsed / duration, 1);
+			
+			if (progress < 1) {
+				// Smooth easing for auto-complete
+				const eased = progress * progress * (3 - 2 * progress); // smoothstep
+				timerSeconds = startSeconds + (targetSeconds - startSeconds) * eased;
+				autoCompleteAnimationId = requestAnimationFrame(animate);
+			} else {
+				timerSeconds = targetSeconds;
+				checkTimerComplete(timerSeconds);
+				autoCompleteAnimationId = null;
+			}
+		}
+		
+		autoCompleteAnimationId = requestAnimationFrame(animate);
+	}
+
 	// Slides - chart appears on steps 2-7, intro and conclusion on other steps
 	const slides = [
 		{
 			title: "Earning The Midnight Oil",
-			content: "Light after dark - one of humanity's most basic needs. But how much did it really cost throughout history?"
+			content: ""
 		},
 		{
-			title: "A Journey Back in Time",
-			content: "We're about to travel backwards through time, starting with today's incredibly cheap light and moving back to ancient civilizations. Prepare to see some dramatic differences."
+			title: "Who Are We?",
+			content: ""
 		},
 		{
-			title: "Today (2024): LED Technology",
+			title: "2024: LED Lighting",
 			content: "Modern LED lights cost almost nothing in terms of labor - just 0.01 seconds of work for equivalent light."
 		},
 		{
@@ -644,19 +755,19 @@
 			content: "Fluorescent bulbs were a major improvement, but still cost 42 times more labor than today's LEDs."
 		},
 		{
-			title: "1879: Dawn of Electric Light",
+			title: "1879: The Light Bulb",
 			content: "Edison's carbon filament bulbs required 2,700 seconds of labor - that's 45 minutes of work for the same light!"
 		},
 		{
-			title: "1843: The Age of Whale Oil",
+			title: "1843: Whale Oil",
 			content: "Whale oil lamps needed 5 hours of labor (18,000 seconds) for equivalent illumination."
 		},
 		{
-			title: "500 CE: Classical Olive Oil",
+			title: "500 CE: Olive Oil",
 			content: "In the classical period, olive oil lamps required 22 hours of labor - nearly a full day's work!"
 		},
 		{
-			title: "1750 BCE: Ancient Sesame Oil",
+			title: "1750 BCE: Sesame Oil",
 			content: "In ancient times, sesame oil lamps needed 41 hours of labor. Light was incredibly precious."
 		},
 		{
@@ -683,54 +794,37 @@
 		onwheel={handleWheel}
 		style="background-color: {backgroundColor}; color: {textColor}; text-shadow: {textShadow}; transition: background-color 0.3s ease, color 0.3s ease, text-shadow 0.3s ease;"
 	>
-		<!-- Arduino Connection UI -->
-		<div class="arduino-controls">
-			{#if !isArduinoConnected}
-				<div class="connection-type-selector">
-					<label style="color: {textColor}; font-size: 12px;">
-						<input 
-							type="radio" 
-							bind:group={connectionType} 
-							value="serial"
-						/> USB Serial
-					</label>
-					<label style="color: {textColor}; font-size: 12px;">
-						<input 
-							type="radio" 
-							bind:group={connectionType} 
-							value="wifi"
-						/> WiFi
-					</label>
-				</div>
+		<!-- Time Machine Activation UI -->
+		{#if !isArduinoConnected}
+			<div class="arduino-controls">
 				<button 
-					class="arduino-button connect" 
-					onclick={(e) => { e.stopPropagation(); connectArduino(connectionType); }}
+					class="time-machine-button activate" 
+					onclick={(e) => { e.stopPropagation(); connectArduino('bluetooth'); }}
 					style="color: {textColor}; border-color: {textColor};"
+					disabled={!ArduinoBluetooth.isSupported()}
 				>
-					Connect Arduino ({connectionType.toUpperCase()})
+					⚡ Activate Time Machine
 				</button>
-			{:else}
-				<button 
-					class="arduino-button disconnect" 
-					onclick={(e) => { e.stopPropagation(); disconnectArduino(); }}
-					style="color: {textColor}; border-color: {textColor};"
-				>
-					Disconnect Arduino
-				</button>
-				<span class="arduino-status">🔗 Arduino Connected ({connectionType.toUpperCase()})</span>
-			{/if}
-			
-			{#if arduinoError}
-				<div class="arduino-error" style="color: #ff6b6b;">
-					Error: {arduinoError}
-				</div>
-			{/if}
-		</div>
+				
+				{#if !ArduinoBluetooth.isSupported()}
+					<div class="bluetooth-warning" style="color: #ff9800;">
+						⚠️ Requires HTTPS and modern browser
+					</div>
+				{/if}
+				
+				{#if arduinoError}
+					<div class="arduino-error" style="color: #ff6b6b;">
+						Connection Error: {arduinoError}
+					</div>
+				{/if}
+			</div>
+		{/if}
 		
 		<RippleEffect bind:trigger={rippleTrigger} />
 		<AssetDisplay src={currentAssetSrc} visible={showAsset} />
 
-		<div class="slide-content">
+		<div class="slide-content" class:centered={currentStep < 2 || currentStep > 7}>
+			{console.log('Index: currentStep =', currentStep, 'showing chart =', currentStep >= 2 && currentStep <= 7, 'chartData length =', chartData?.length)}
 			{#if currentStep >= 2 && currentStep <= 7}
 				<!-- Show chart for steps 2-7 (6 chart steps total) -->
 				<Slide 
@@ -749,14 +843,16 @@
 				{/if}
 				{#if chartData.length > 0}
 					<div class="chart-container">
-						<BarChart 
-							data={chartData} 
-							step={currentStep - 2} 
-							progress={chartOpacity}
-							backgroundColor={backgroundColor}
-							textColor={textColor}
-							headerColor={headerColor}
-						/>
+						{#key currentStep}
+							<BarChart 
+								data={chartData} 
+								step={currentStep - 2} 
+								progress={backgroundBrightness}
+								backgroundColor={backgroundColor}
+								textColor={textColor}
+								headerColor={headerColor}
+							/>
+						{/key}
 					</div>
 				{/if}
 			{:else}
@@ -802,6 +898,13 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: flex-start;
+		padding: 2vh 2vw;
+		box-sizing: border-box;
+		gap: 1vh;
+	}
+
+	.slide-content.centered {
 		justify-content: center;
 	}
 
@@ -815,7 +918,7 @@
 		width: 100%;
 		display: flex;
 		justify-content: center;
-		margin: 0.5rem 0;
+		flex-shrink: 0;
 	}
 
 	.arduino-controls {
@@ -829,44 +932,50 @@
 		align-items: flex-end;
 	}
 
-	.connection-type-selector {
-		display: flex;
-		gap: 15px;
-		margin-bottom: 5px;
-	}
-
-	.connection-type-selector label {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		cursor: pointer;
-	}
-
-	.connection-type-selector input[type="radio"] {
-		margin: 0;
-	}
-
-	.arduino-button {
+	.time-machine-button {
 		background: transparent;
 		border: 2px solid;
-		padding: 8px 16px;
-		border-radius: 4px;
+		padding: 12px 20px;
+		border-radius: 8px;
 		cursor: pointer;
-		font-size: 14px;
+		font-size: 16px;
+		font-weight: 600;
 		transition: all 0.3s ease;
 		font-family: inherit;
+		text-transform: uppercase;
+		letter-spacing: 1px;
 	}
 
-	.arduino-button:hover {
+	.time-machine-button:hover:not(:disabled) {
 		background: rgba(255, 255, 255, 0.1);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
 
-	.arduino-button.connect {
-		border-color: #4CAF50;
+	.time-machine-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
 	}
 
-	.arduino-button.disconnect {
-		border-color: #f44336;
+	.time-machine-button.activate {
+		border-color: #00d4ff;
+		color: #00d4ff;
+	}
+
+	.time-machine-button.activate:hover:not(:disabled) {
+		background: rgba(0, 212, 255, 0.1);
+		box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+	}
+
+	.time-machine-button.deactivate {
+		border-color: #ff6b6b;
+		color: #ff6b6b;
+	}
+
+	.time-machine-button.deactivate:hover {
+		background: rgba(255, 107, 107, 0.1);
+		box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
 	}
 
 	.arduino-status {
@@ -885,23 +994,34 @@
 	}
 
 	.elapsed-time {
-		font-size: 1.2rem;
+		font-size: clamp(1rem, 3vw, 2.5rem);
 		font-style: italic;
 		text-align: center;
-		margin-top: 2rem;
+		margin-top: clamp(1rem, 4vh, 4rem);
 		opacity: 0.8;
 	}
 
 	.light-calculations {
-		max-width: 600px;
-		margin: 2rem auto;
+		max-width: clamp(300px, 80vw, 1000px);
+		margin: clamp(1rem, 4vh, 4rem) auto;
 		text-align: center;
-		font-size: 1rem;
+		font-size: clamp(0.9rem, 2.5vw, 2rem);
 		line-height: 1.6;
 	}
 
 	.light-era {
-		margin: 0.5rem 0;
+		margin: clamp(0.25rem, 1vh, 1rem) 0;
 		opacity: 0.9;
+	}
+
+	.bluetooth-warning {
+		font-size: 11px;
+		text-align: right;
+		max-width: 200px;
+		margin-top: 5px;
+		padding: 4px 8px;
+		background: rgba(255, 152, 0, 0.1);
+		border-radius: 4px;
+		border: 1px solid #ff9800;
 	}
 </style>
