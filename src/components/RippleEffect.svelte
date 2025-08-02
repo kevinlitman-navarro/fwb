@@ -11,14 +11,19 @@
 			isAnimating = true;
 		}
 	});
+	
+	function handleAnimationEnd() {
+		isAnimating = false;
+	}
 </script>
 
 {#if isAnimating}
 	<div class="ripple-container">
 		{#key trigger}
+			<!-- Circle ripple -->
 			<div 
-				class="ripple"
-				onanimationend={() => isAnimating = false}
+				class="ripple circle"
+				onanimationend={handleAnimationEnd}
 			></div>
 		{/key}
 	</div>
@@ -42,9 +47,15 @@
 		width: 20px;
 		height: 20px;
 		border: 2px solid rgba(255, 255, 255, 0.8);
+		position: absolute;
+	}
+
+	/* Circle shape */
+	.ripple.circle {
 		border-radius: 50%;
 		animation: ripple 3s ease-out forwards;
 	}
+
 
 	@keyframes ripple {
 		0% {
@@ -64,4 +75,5 @@
 			border-width: 0px;
 		}
 	}
+
 </style>

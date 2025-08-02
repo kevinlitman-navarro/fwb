@@ -15,7 +15,7 @@
 	const data = getContext("data");
 
 	let currentStep = $state(0);
-	const totalSteps = 11;
+	const totalSteps = 8;
 	let chartData = $state([]);
 	let timerSeconds = $state(0);
 	let rippleTrigger = $state(0);
@@ -29,7 +29,7 @@
 	let currentAssetSrc = $state(null);
 	let showAsset = $state(false);
 	
-	// Track if media cycle is complete for final step (step 7)
+	// Track if media cycle is complete for final step (step 6)
 	let finalStepMediaComplete = $state(false);
 	
 	// Page launch timer
@@ -39,13 +39,13 @@
 	
 	// Map steps to folder names
 	const stepToFolder = {
-		1: 'intro_1',
-		2: '2024', 
-		3: '1992',
-		4: '1879',
-		5: '1843',
-		6: '500',
-		7: 'babylon'
+		0: 'intro_1',
+		1: '2024', 
+		2: '1992',
+		3: '1879',
+		4: '1843',
+		5: '500',
+		6: 'babylon'
 	};
 	
 	// Get available assets for current step
@@ -55,10 +55,10 @@
 		
 		// Based on the current folder structure, return available assets
 		const assetMap = {
-			'intro_1': ['5.jpg', '6.jpg', '7.png'],
-			'2024': ['1.jpeg'],
-			'1992': ['1.png'], 
-			'1879': ['1.jpg', '2.png', '3.png', '4.jpg', '5.jpeg', '6.jpeg', '7.jpeg'],
+			'intro_1': ['1.jpg', '2.jpg', '3.jpg', '4.png'],
+			'2024': [],
+			'1992': [], 
+			'1879': ['1.jpg', '2.png', '3.png', '4.jpg', '5.jpg', '6.jpg', '7.jpg'],
 			'1843': ['1.jpg', '2.jpg'],
 			'500': ['1.mp4', '2.mp4'],
 			'babylon': ['1.jpg']
@@ -157,13 +157,13 @@
 	function getTimerLimit(step) {
 		if (!chartData || chartData.length === 0) return 60; // fallback
 		
-		const dataIndex = step - 2; // step 2 = index 0
+		const dataIndex = step - 1; // step 1 = index 0
 		if (dataIndex < 0 || dataIndex >= chartData.length) return 60;
 		
 		const era = chartData[dataIndex];
 		if (!era) return 60;
 		
-		const stepPosition = step - 2; // 0-5 for the 6 eras
+		const stepPosition = step - 1; // 0-5 for the 6 eras
 		let limit;
 		
 		if (stepPosition <= 1) {
@@ -191,8 +191,8 @@
 	// Optimize derived calculations with memoization
 	const backgroundBrightness = $derived(Math.min(timerSeconds / currentTimerLimit, 1));
 	
-	// Force light styling after Babylon section (step 7)
-	const isLightMode = $derived(currentStep > 7);
+	// Force light styling after Babylon section (step 6)
+	const isLightMode = $derived(currentStep > 6);
 	const effectiveBrightness = $derived(isLightMode ? 1 : backgroundBrightness);
 	
 	// Direct derived calculations for responsive Arduino control
@@ -204,9 +204,9 @@
 
 	// Use effect to reset timer when entering year steps (to avoid race conditions)
 	$effect(() => {
-		if (currentStep >= 2 && currentStep <= 7) {
+		if (currentStep >= 1 && currentStep <= 6) {
 			console.log(`Effect: Resetting timer for step ${currentStep}, limit: ${currentTimerLimit}`);
-			console.log(`Chart data available:`, chartData?.length > 0, chartData?.[currentStep - 2]);
+			console.log(`Chart data available:`, chartData?.length > 0, chartData?.[currentStep - 1]);
 			
 			// Cancel any ongoing animations when switching steps
 			if (currentAnimationId) {
@@ -293,8 +293,8 @@
 	}
 
 	function handleArduinoDial(dialData) {
-		// Only respond to dial input if we're on timer steps (2-7)
-		if (currentStep < 2 || currentStep > 7) return;
+		// Only respond to dial input if we're on timer steps (1-6)
+		if (currentStep < 1 || currentStep > 6) return;
 		
 		// Convert dial delta to proportional scroll amount
 		// Adjust sensitivity based on connection type
@@ -325,8 +325,8 @@
 			wheelAnimationId = null;
 		}
 		
-		// For step 2 (2024) with very small timer limits, use direct updates
-		if (currentStep === 2 && currentTimerLimit < 1) {
+		// For step 1 (2024) with very small timer limits, use direct updates
+		if (currentStep === 1 && currentTimerLimit < 1) {
 			// Since 2024 step has 0.01s limit and 10ms minimum movement,
 			// any forward movement should complete the timer
 			if (event.deltaY > 0) {
@@ -348,17 +348,17 @@
 		}
 		
 		// Adjust increments for each step
-		if (currentStep === 2) {
+		if (currentStep === 1) {
 			increment = Math.max(increment, 0.01); // 10ms minimum (instant completion)
-		} else if (currentStep === 3) {
+		} else if (currentStep === 2) {
 			increment = Math.max(increment, 0.21); // 210ms minimum (completes in 2 movements)
-		} else if (currentStep === 4) {
+		} else if (currentStep === 3) {
 			increment = increment / 2; // 2x longer (1879: Edison's bulbs)
+		} else if (currentStep === 4) {
+			increment = increment / 4.5; // 4.5x longer (1843: Whale oil)
 		} else if (currentStep === 5) {
-			increment = increment / 3; // 3x longer (1843: Whale oil)
-		} else if (currentStep === 6) {
 			increment = increment / 10; // 10x longer (500 CE: Olive oil)
-		} else if (currentStep === 7) {
+		} else if (currentStep === 6) {
 			increment = increment / 20; // 20x longer (1750 BCE: Sesame oil)
 		}
 		
@@ -388,46 +388,99 @@
 	function nextStep() {
 		// Check if current step has assets to cycle through
 		const availableAssets = getAvailableAssets(currentStep);
+		console.log(`Step ${currentStep}: Available assets:`, availableAssets.length, 'Current index:', currentAssetIndex, 'showAsset:', showAsset);
 		
 		if (availableAssets.length > 0) {
-			// If we haven't started showing assets yet, show the first one
-			if (currentAssetIndex === 0 && !showAsset) {
-				currentAssetIndex = 1;
-				currentAssetSrc = getAssetSrc(currentStep, 1);
-				showAsset = true;
-				return;
-			}
-			
-			// If we're showing an asset, try to show the next one
-			if (showAsset && currentAssetIndex < availableAssets.length) {
-				currentAssetIndex++;
-				const nextAssetSrc = getAssetSrc(currentStep, currentAssetIndex);
-				
-				if (nextAssetSrc) {
-					// Show next asset (replaces current)
-					currentAssetSrc = nextAssetSrc;
+			// Special handling for step 5 (500 CE) - alternate between showing and hiding each video
+			if (currentStep === 5) {
+				if (currentAssetIndex === 0 && !showAsset) {
+					// Click 1: Show first video
+					currentAssetIndex = 1;
+					currentAssetSrc = getAssetSrc(currentStep, 1);
+					showAsset = true;
+					console.log('Step 5: Showing first video');
 					return;
 				}
-			}
-			
-			// If we're at the last asset or beyond, remove the current asset
-			if (showAsset) {
-				showAsset = false;
-				currentAssetSrc = null;
-				
-				// Mark media cycle as complete for final step (step 7 = 1750 BCE)
-				if (currentStep === 7) {
-					finalStepMediaComplete = true;
+				if (currentAssetIndex === 1 && showAsset) {
+					// Click 2: Hide first video
+					showAsset = false;
+					currentAssetSrc = null;
+					console.log('Step 5: Hiding first video');
+					return;
 				}
-				return;
+				if (currentAssetIndex === 1 && !showAsset) {
+					// Click 3: Show second video
+					currentAssetIndex = 2;
+					currentAssetSrc = getAssetSrc(currentStep, 2);
+					showAsset = true;
+					console.log('Step 5: Showing second video');
+					return;
+				}
+				if (currentAssetIndex === 2 && showAsset) {
+					// Click 4: Hide second video
+					showAsset = false;
+					currentAssetSrc = null;
+					console.log('Step 5: Hiding second video - media cycle complete');
+					return;
+				}
+				// Click 5+: Advance to next step (handled below)
+			} else {
+				// Standard media cycling for other steps
+				// If we haven't started showing assets yet, show the first one
+				if (currentAssetIndex === 0 && !showAsset) {
+					currentAssetIndex = 1;
+					currentAssetSrc = getAssetSrc(currentStep, 1);
+					showAsset = true;
+					console.log(`Step ${currentStep}: Showing first asset`);
+					return;
+				}
+				
+				// If we're showing an asset, try to show the next one
+				if (showAsset && currentAssetIndex < availableAssets.length) {
+					currentAssetIndex++;
+					const nextAssetSrc = getAssetSrc(currentStep, currentAssetIndex);
+					
+					if (nextAssetSrc) {
+						// Show next asset (replaces current)
+						currentAssetSrc = nextAssetSrc;
+						return;
+					}
+				}
+				
+				// If we're at the last asset or beyond, remove the current asset
+				if (showAsset) {
+					showAsset = false;
+					currentAssetSrc = null;
+					
+					// Mark media cycle as complete for final step (step 6 = 1750 BCE)
+					if (currentStep === 6) {
+						finalStepMediaComplete = true;
+						console.log('Babylon media cycle complete - finalStepMediaComplete set to true');
+						// Don't advance step yet - let handleClick handle the auto-complete logic
+						return;
+					}
+					return;
+				}
 			}
 		}
 		
 		// No assets or all assets have been cycled through, advance to next step
+		// BUT: Don't auto-advance from Babylon (step 6) if media cycle just completed
+		if (currentStep === 6 && finalStepMediaComplete) {
+			console.log("Babylon step - media complete, not auto-advancing");
+			return; // Let handleClick decide what to do next
+		}
+		
 		if (currentStep < totalSteps - 1) {
-			rippleTrigger++;
-			playStepSound(currentStep, currentStep + 1);
-			currentStep++;
+			const nextStepValue = currentStep + 1;
+			
+			// Only trigger ripple effect when transitioning TO timer steps (1-6) - going back in time
+			if (nextStepValue >= 1 && nextStepValue <= 6) {
+				rippleTrigger++;
+			}
+			
+			playStepSound(currentStep, nextStepValue);
+			currentStep = nextStepValue;
 			resetAssetState();
 		}
 	}
@@ -439,28 +492,28 @@
 			continuousAudio = null;
 		}
 		
-		// Only play transition audio when moving TO timer steps (2-7)
-		// This excludes the first transition (0->1) and final transitions (7->8, 8->9, 9->10)
-		if (toStep < 2 || toStep > 7) {
+		// Only play transition audio when moving TO timer steps (1-6)
+		// This excludes the first transition (0->1) and final transitions (6->7, 7->8, 8->9)
+		if (toStep < 1 || toStep > 6) {
 			return;
 		}
 		
 		// Special cases: continuous audio for historical eras
-		if (toStep === 5) {
+		if (toStep === 4) {
 			// Victorian England (1843: The Age of Whale Oil)
 			continuousAudio = new Audio('/assets/sounds/victorian.mp3');
 			continuousAudio.loop = true;
 			continuousAudio.play().catch(e => console.log('Victorian audio play failed:', e));
 			return;
-		} else if (toStep === 6) {
+		} else if (toStep === 5) {
 			// Rome (500 CE: Classical Olive Oil)
 			continuousAudio = new Audio('/assets/sounds/rome.mp3');
 			continuousAudio.loop = true;
 			continuousAudio.play().catch(e => console.log('Rome audio play failed:', e));
 			return;
-		} else if (toStep === 7) {
+		} else if (toStep === 6) {
 			// Babylon (1750 BCE: Ancient Sesame Oil)
-			continuousAudio = new Audio('/assets/sounds/gish.mp3');
+			continuousAudio = new Audio('/assets/sounds/gish.m4a');
 			continuousAudio.loop = true;
 			continuousAudio.play().catch(e => console.log('Gish audio play failed:', e));
 			return;
@@ -469,8 +522,8 @@
 		// Play audio for forward transitions to timer steps
 		let audioFile;
 		
-		// Special case: step 2 (2024) to step 3 (1992) - use seinfeld sound
-		if (fromStep === 2 && toStep === 3) {
+		// Special case: step 1 (2024) to step 2 (1992) - use seinfeld sound
+		if (fromStep === 1 && toStep === 2) {
 			audioFile = '/assets/sounds/seinfeld.mp3';
 		} else {
 			// All other forward transitions use flashback sound
@@ -482,34 +535,20 @@
 		
 		audio.play().catch(e => console.log('Audio play failed:', e));
 		
-		// Let seinfeld play in full, add smooth fadeout for flashback
-		if (audioFile.includes('seinfeld')) {
-			// Seinfeld plays in full without interruption
-			return;
-		}
-		
-		// For flashback sound: wait for it to finish naturally, then add fadeout
-		audio.addEventListener('loadedmetadata', () => {
-			const duration = audio.duration;
-			if (duration && duration > 0) {
-				// Start fadeout 2 seconds before the end
-				const fadeStartTime = Math.max(0, (duration - 2) * 1000);
-				
-				setTimeout(() => {
-					// Smooth fadeout over 2 seconds
-					const fadeInterval = setInterval(() => {
-						if (audio.volume > 0.1) {
-							audio.volume = Math.max(0, audio.volume - 0.05);
-						} else {
-							audio.pause();
-							audio.currentTime = 0;
-							audio.volume = 1; // Reset for next use
-							clearInterval(fadeInterval);
-						}
-					}, 100); // Fade step every 100ms
-				}, fadeStartTime);
-			}
-		});
+		// Fade out both flashback and seinfeld sounds after 5 seconds
+		setTimeout(() => {
+			// Start 3-second fadeout after 5 seconds of playback
+			const fadeInterval = setInterval(() => {
+				if (audio.volume > 0.05) {
+					audio.volume = Math.max(0, audio.volume - 0.02);
+				} else {
+					audio.pause();
+					audio.currentTime = 0;
+					audio.volume = 1; // Reset for next use
+					clearInterval(fadeInterval);
+				}
+			}, 60); // Fade step every 60ms (3 second total fadeout)
+		}, 5000); // Start fade after 5 seconds
 	}
 
 	function prevStep() {
@@ -530,20 +569,28 @@
 		// Only advance on clicks to the main content area, not UI elements
 		if (event.target.closest('.stepper-ui')) return;
 		
-		// Special handling for final step (step 7 = 1750 BCE) after media cycle
-		if (currentStep === 7 && finalStepMediaComplete) {
+		console.log('handleClick - currentStep:', currentStep, 'finalStepMediaComplete:', finalStepMediaComplete);
+		
+		// Special handling for final step (step 6 = 1750 BCE) after media cycle
+		if (currentStep === 6 && finalStepMediaComplete) {
+			console.log('Babylon auto-complete check - Timer:', timerSeconds, 'Limit:', currentTimerLimit);
 			// Check if timer is already complete (at or near limit)
 			const completion = timerSeconds / currentTimerLimit;
+			console.log('Completion percentage:', completion);
 			if (completion >= 0.99) {
 				// Timer is complete, allow normal step advancement
+				console.log('Timer complete, advancing step');
+				finalStepMediaComplete = false; // Clear flag before advancing
 				nextStep();
 			} else {
 				// Auto-complete timer instead of advancing step
+				console.log('Auto-completing timer');
 				autoCompleteTimer();
 			}
 			return;
 		}
 		
+		console.log('Regular nextStep() call');
 		nextStep();
 	}
 
@@ -566,8 +613,8 @@
 			wheelAnimationId = null;
 		}
 		
-		// For step 2 (2024) with very small timer limits, use direct updates without animation
-		if (currentStep === 2 && currentTimerLimit < 1) {
+		// For step 1 (2024) with very small timer limits, use direct updates without animation
+		if (currentStep === 1 && currentTimerLimit < 1) {
 			// Since 2024 step has 0.01s limit and 10ms minimum movement,
 			// any forward movement should complete the timer
 			if (event.deltaY > 0) {
@@ -595,17 +642,17 @@
 			}
 			
 			// Adjust increments for each step
-			if (currentStep === 2) {
+			if (currentStep === 1) {
 				increment = Math.max(increment, 0.01); // 10ms minimum (instant completion)
-			} else if (currentStep === 3) {
+			} else if (currentStep === 2) {
 				increment = Math.max(increment, 0.21); // 210ms minimum (completes in 2 movements)
-			} else if (currentStep === 4) {
+			} else if (currentStep === 3) {
 				increment = increment / 2; // 2x longer (1879: Edison's bulbs)
+			} else if (currentStep === 4) {
+				increment = increment / 4.5; // 4.5x longer (1843: Whale oil)
 			} else if (currentStep === 5) {
-				increment = increment / 3; // 3x longer (1843: Whale oil)
-			} else if (currentStep === 6) {
 				increment = increment / 10; // 10x longer (500 CE: Olive oil)
-			} else if (currentStep === 7) {
+			} else if (currentStep === 6) {
 				increment = increment / 20; // 20x longer (1750 BCE: Sesame oil)
 			}
 			
@@ -635,8 +682,8 @@
 			return;
 		}
 		
-		// Shorter duration for step 2 (2024) for better responsiveness
-		const duration = currentStep === 2 ? 150 : 300;
+		// Shorter duration for step 1 (2024) for better responsiveness
+		const duration = currentStep === 1 ? 150 : 300;
 		const startTime = performance.now();
 		
 		function animate(currentTime) {
@@ -659,10 +706,10 @@
 	}
 
 	function checkTimerComplete(currentTime) {
-		// Check if timer has reached the limit (within 1% tolerance)
-		if (currentStep >= 2 && currentStep <= 7) {
+		// Check if timer has reached the limit (exactly at completion)
+		if (currentStep >= 1 && currentStep <= 6) {
 			const completion = currentTime / currentTimerLimit;
-			if (completion >= 0.99 && !stepsWithDingPlayed.has(currentStep)) {
+			if (completion >= 1.0 && !stepsWithDingPlayed.has(currentStep)) {
 				stepsWithDingPlayed.add(currentStep);
 				playDingSound();
 			}
@@ -730,20 +777,19 @@
 				timerSeconds = targetSeconds;
 				checkTimerComplete(timerSeconds);
 				autoCompleteAnimationId = null;
+				
+				// Auto-complete finished - just stop here, let user click to advance
+				console.log('Auto-complete finished, waiting for user click to advance');
 			}
 		}
 		
 		autoCompleteAnimationId = requestAnimationFrame(animate);
 	}
 
-	// Slides - chart appears on steps 2-7, intro and conclusion on other steps
+	// Slides - chart appears on steps 1-6, intro and conclusion on other steps
 	const slides = [
 		{
 			title: "Earning The Midnight Oil",
-			content: ""
-		},
-		{
-			title: "Who Are We?",
 			content: ""
 		},
 		{
@@ -771,16 +817,8 @@
 			content: "In ancient times, sesame oil lamps needed 41 hours of labor. Light was incredibly precious."
 		},
 		{
-			title: "The Transformation",
-			content: "We've just witnessed a 14.7 million-fold improvement in the labor cost of light over human history."
-		},
-		{
-			title: "What This Means", 
-			content: "Technology has made one of humanity's most basic needs - light after dark - essentially free."
-		},
-		{
 			title: "The End",
-			content: "Thank you for this journey through time. The next time you flip a light switch, remember how remarkable that simple act truly is."
+			content: ""
 		}
 	];
 </script>
@@ -821,12 +859,12 @@
 		{/if}
 		
 		<RippleEffect bind:trigger={rippleTrigger} />
-		<AssetDisplay src={currentAssetSrc} visible={showAsset} />
+		<AssetDisplay src={currentAssetSrc} visible={showAsset} currentStep={currentStep} />
 
-		<div class="slide-content" class:centered={currentStep < 2 || currentStep > 7}>
-			{console.log('Index: currentStep =', currentStep, 'showing chart =', currentStep >= 2 && currentStep <= 7, 'chartData length =', chartData?.length)}
-			{#if currentStep >= 2 && currentStep <= 7}
-				<!-- Show chart for steps 2-7 (6 chart steps total) -->
+		<div class="slide-content" class:centered={currentStep < 1 || currentStep > 6}>
+			{console.log('Index: currentStep =', currentStep, 'showing chart =', currentStep >= 1 && currentStep <= 6, 'chartData length =', chartData?.length)}
+			{#if currentStep >= 1 && currentStep <= 6}
+				<!-- Show chart for steps 1-6 (6 chart steps total) -->
 				<Slide 
 					title={slides[currentStep].title}
 					content=""
@@ -836,7 +874,7 @@
 					contentOpacity={chartOpacity}
 					headerColor={headerColor}
 				/>
-				{#if currentStep >= 2}
+				{#if currentStep >= 1}
 					<div class="timer-container">
 						<DigitalTimer bind:time={timerSeconds} />
 					</div>
@@ -846,7 +884,7 @@
 						{#key currentStep}
 							<BarChart 
 								data={chartData} 
-								step={currentStep - 2} 
+								step={currentStep - 1} 
 								progress={backgroundBrightness}
 								backgroundColor={backgroundColor}
 								textColor={textColor}

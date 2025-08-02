@@ -1,5 +1,5 @@
 <script>
-	let { src, visible = true } = $props();
+	let { src, visible = true, currentStep = 0 } = $props();
 	
 	function getFileType(src) {
 		if (!src) return 'image';
@@ -8,6 +8,8 @@
 	}
 	
 	const fileType = $derived(getFileType(src));
+	// Enable sound and larger size for Roman step (step 5)
+	const isRomanStep = $derived(currentStep === 5);
 </script>
 
 {#if visible && src}
@@ -16,9 +18,10 @@
 			<video 
 				src={src} 
 				autoplay 
-				muted 
+				muted={!isRomanStep}
 				loop 
 				class="asset-media"
+				class:roman-video={isRomanStep}
 				alt="Historical asset"
 			/>
 		{:else}
@@ -52,5 +55,10 @@
 		object-fit: contain;
 		border-radius: 8px;
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+	}
+	
+	.roman-video {
+		max-width: 135vw; /* 50% larger than 90vw */
+		max-height: 135vh; /* 50% larger than 90vh */
 	}
 </style>
